@@ -286,7 +286,10 @@ export function placePiece( models, key, gx, gz, orient ) {
 
 }
 
-// Derive ordered AI waypoints from track cells
+// Derive ordered AI waypoints from track cells by tracing connectivity.
+// Each cell type exposes specific open sides based on orientation:
+//   Straight 0/10  → N+S,  Straight 16/22 → E+W
+//   Corner 0  → S+W,  Corner 10 → N+E,  Corner 16 → E+S,  Corner 22 → W+N
 export function extractWaypoints( cells ) {
 
 	const S = CELL_RAW * GRID_SCALE;
@@ -300,11 +303,68 @@ export function extractWaypoints( cells ) {
 
 	const list = cells || TRACK_CELLS;
 
-	// Reorder starting from finish line
-	let startIdx = list.findIndex( c => c[ 2 ] === 'track-finish' );
-	if ( startIdx < 0 ) startIdx = 0;
-	const ordered = [ ...list.slice( startIdx ), ...list.slice( 0, startIdx ) ];
+	// Build lookup
+	const cellMap = new Map();
+	for ( const cell of list ) {
 
+		if ( cell[ 2 ].startsWith( 'track-' ) ) cellMap.set( `${ cell[ 0 ] },${ cell[ 1 ] }`, cell );
+
+	}
+
+	// Which [dx,dz] pairs a cell opens toward
+	function connections( key, orient ) {
+
+		const c = key === 'track-corner';
+		switch ( orient ) {
+			case 0:  return c ? [ [ 0, 1 ], [ - 1, 0 ] ] : [ [ 0, - 1 ], [ 0, 1 ] ];
+			case 10: return c ? [ [ 0, - 1 ], [ 1, 0 ] ] : [ [ 0, - 1 ], [ 0, 1 ] ];
+			case 16: return c ? [ [ 1, 0 ], [ 0, 1 ] ]   : [ [ - 1, 0 ], [ 1, 0 ] ];
+			case 22: return c ? [ [ - 1, 0 ], [ 0, - 1 ] ] : [ [ - 1, 0 ], [ 1, 0 ] ];
+			default: return [ [ 0, - 1 ], [ 0, 1 ], [ - 1, 0 ], [ 1, 0 ] ];
+		}
+
+	}
+
+	// Start at finish cell
+	const startCell = list.find( c => c[ 2 ] === 'track-finish' ) || list[ 0 ];
+	if ( ! startCell ) return [];
+
+	// Bias the initial step to match the spawn direction (away from the car's back)
+	// orient=0 → faces +Z (south), back is north → block north neighbor first
+	const BACK = { 0: [ 0, - 1 ], 10: [ 0, 1 ], 16: [ - 1, 0 ], 22: [ 1, 0 ] };
+	const backOffset = BACK[ startCell[ 3 ] ] || [ 0, - 1 ];
+	let prevKey = `${ startCell[ 0 ] + backOffset[ 0 ] },${ startCell[ 1 ] + backOffset[ 1 ] }`;
+
+	const ordered = [ startCell ];
+	const visited = new Set( [ `${ startCell[ 0 ] },${ startCell[ 1 ] }` ] );
+	let current = startCell;
+
+	for ( let iter = 0; iter < 200; iter ++ ) {
+
+		const [ gx, gz, key, orient ] = current;
+		let next = null;
+
+		for ( const [ dx, dz ] of connections( key, orient ) ) {
+
+			const nk = `${ gx + dx },${ gz + dz }`;
+			if ( nk === prevKey ) continue;
+			const candidate = cellMap.get( nk );
+			if ( ! candidate || visited.has( `${ candidate[ 0 ] },${ candidate[ 1 ] }` ) ) continue;
+			next = candidate;
+			break;
+
+		}
+
+		if ( ! next ) break;
+
+		prevKey = `${ gx },${ gz }`;
+		ordered.push( next );
+		visited.add( `${ next[ 0 ] },${ next[ 1 ] }` );
+		current = next;
+
+	}
+
+	// Generate waypoints
 	const waypoints = [];
 
 	for ( const [ gx, gz, key, orient ] of ordered ) {
@@ -317,10 +377,8 @@ export function extractWaypoints( cells ) {
 			const deg = ORIENT_DEG[ orient ] ?? 0;
 			const rad = deg * Math.PI / 180;
 			const cr = Math.cos( rad ), sr = Math.sin( rad );
-
 			const wcx = cx + ( ARC_CENTER_X * cr + ARC_CENTER_Z * sr ) * GRID_SCALE;
 			const wcz = cz + ( - ARC_CENTER_X * sr + ARC_CENTER_Z * cr ) * GRID_SCALE;
-
 			const arcStart = - rad;
 			const midR = MID_R * GRID_SCALE;
 

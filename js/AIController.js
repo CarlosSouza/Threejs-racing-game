@@ -6,7 +6,7 @@ const _toVehicle = new THREE.Vector3();
 
 const WAYPOINT_REACH_RADIUS = 3.5;
 const STEER_GAIN = 3.0;
-const LOOK_AHEAD = 2;
+const LOOK_AHEAD = 1;
 
 export class AIController {
 
