@@ -550,7 +550,10 @@ export class GameState {
 
 		if ( ! this.raceManager.started ) {
 
-			// During countdown, keep vehicles still
+			// Tick countdown timer
+			this.raceManager.update( dt );
+
+			// Keep vehicles still during countdown
 			const idle = { x: 0, z: 0, touchActive: false, fire: false };
 			this.player.update( dt, idle );
 			for ( const v of this.aiVehicles ) v.update( dt, idle );
