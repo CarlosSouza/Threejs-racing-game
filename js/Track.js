@@ -364,11 +364,12 @@ export function extractWaypoints( cells ) {
 
 	}
 
-	// Generate waypoints
+	// Generate waypoints — iterate with index so we can look up the previous cell
 	const waypoints = [];
 
-	for ( const [ gx, gz, key, orient ] of ordered ) {
+	for ( let ci = 0; ci < ordered.length; ci ++ ) {
 
+		const [ gx, gz, key, orient ] = ordered[ ci ];
 		const cx = ( gx + 0.5 ) * S;
 		const cz = ( gz + 0.5 ) * S;
 
@@ -382,17 +383,34 @@ export function extractWaypoints( cells ) {
 			const arcStart = - rad;
 			const midR = MID_R * GRID_SCALE;
 
+			// Determine if the car enters from the arc-END side (connections[1]).
+			// If so the sub-waypoints must be emitted in reverse order.
+			let reverse = false;
+			if ( ci > 0 ) {
+
+				const [ pgx, pgz ] = ordered[ ci - 1 ];
+				const entryDx = pgx - gx;
+				const entryDz = pgz - gz;
+				const conns = connections( key, orient );
+				if ( entryDx === conns[ 1 ][ 0 ] && entryDz === conns[ 1 ][ 1 ] ) reverse = true;
+
+			}
+
+			const arcPts = [];
 			for ( let i = 0; i < 3; i ++ ) {
 
 				const t = ( i + 0.5 ) / 3;
 				const angle = arcStart + t * ARC_SPAN;
-				waypoints.push( new THREE.Vector3(
+				arcPts.push( new THREE.Vector3(
 					wcx + midR * Math.cos( angle ),
 					0,
 					wcz + midR * Math.sin( angle )
 				) );
 
 			}
+
+			if ( reverse ) arcPts.reverse();
+			for ( const p of arcPts ) waypoints.push( p );
 
 		} else {
 

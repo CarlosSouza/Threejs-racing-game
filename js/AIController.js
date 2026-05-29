@@ -4,7 +4,7 @@ const _toTarget = new THREE.Vector3();
 const _forward = new THREE.Vector3();
 const _toVehicle = new THREE.Vector3();
 
-const WAYPOINT_REACH_RADIUS = 3.5;
+const WAYPOINT_REACH_RADIUS = 4.5;
 const STEER_GAIN = 3.0;
 const LOOK_AHEAD = 1;
 
